@@ -1,0 +1,117 @@
+=============================
+操作日志说明文档
+=============================
+
+位置
+==============
+所有操作日志位于wo/objectlogs下
+
+日志属性
+=============
+::
+
+(索引)principal_id      : 操作人内部id
+(全文索引)displayname   : 操作人姓名
+(索引)timestamp         : 发生的变更的时间 
+(索引)operation         : 操作类型 upload / newrevision /removerevision/ workflow
+(索引)bound_object_type : ContentInfo 的 标识字符串，比如 file/folder/task
+(索引)bound_object_parents : 帮定对象父亲的intid的list
+(索引)bound_object_id   : intid
+(全文索引)bound_object_title : title
+(全文索引)details       : 变更内容说明
+(不进索引)bound_object_location   : 帮定对象所在容器的完整的title路径
+
+
+提供索引
+=============
+以下是操作日志提供的全部索引.
+
+====================  =============   ========================
+    索引名称            索引类型         索引说明  
+====================  =============   ========================
+principal_id          ValueIndex      操作人内部id 
+displayname           TextIndex       操作人姓名   
+timestamp             ValueIndex      变更时间    
+operation             ValueIndex      操作类型
+bound_object_type     ValueIndex      ContentInfo标识字符串
+bound_object_parents  SetIndex        绑定对象父亲的intid的list
+bound_object_id       ValueIndex      绑定对象的intid
+searchable_text       TextIndex       全文索引:dispalyname+bound_object_title+details
+
+====================  =============   ========================
+
+查询索引方法
+================
+
+- 找到操作日志容器:
+
+    使用IObjectLogContainerLookup适配器.
+    
+    logcontainer = IObjectLogContainerLookup(obj)()
+
+- 查询示例:
+
+    所有索引位于操作日志容器下的indexcontainer文件夹中
+    
+    SearchQuery(Eq(logcontainer['indexcontainer']['bound_object_id'],intid))
+
+- 列出对象日志:
+
+    为和旧有接口兼容,IObjectLogManager适配器
+    中的listLogs方法,但文件夹/目录等处必须使用上述索引来查询.
+
+日志管理
+=============
+用IObjectLogManager适配器对操作日志统一管理,接口和原来基本一致,去除了清空日志的clear方法
+
+- 添加日志
+
+  addObjectLog(operation,text)
+
+  operation为操作类型,text为操作描述
+
+- 列出日志
+
+  listLogs
+
+  返回为一个List,每个元素为一个dict，dict里面包含日志的所有信息。文件和文件夹通用。在文件夹下会返回该文件夹下的所有日志。
+  日志按时间排序。
+
+操作历史的状态和维护
+===============================
+回收站管理
+-------------------
+需要在操作日志里面支持：
+
+1. 能恢复删除的文件和文件夹
+
+   - 方便的查找到话全部回收站中的内容：放入回收站 move2recycle
+   - 一旦还原，不可再执行恢复操作：
+
+     - 更改从前的操作类型：回收站(已还原) recyclereverted
+
+   - 一旦永久删除，不可在执行恢复操作：
+
+     - 更改从前的操作类型：回收站(已删除) recycledeleted
+
+2. 在后台自动永久删除回收站中指定时间(比如30天)后的文件
+
+   - 使用wget一个url来清理，需要控制请求来源remote为Localhost
+   - 需要方便的找出处于回收站中的文件
+   - 记录新的操作历史：自动清理回收站：cleanrecycle
+
+操作历史维护接口说明
+-----------------------
+操作维护是在操作日志上可进行的操作，使用IActionManager维护
+
+1. 列出日志上可执行的操作
+
+  - listActions
+
+2. 执行该操作
+
+  - excuteAction(operation)
+
+收回 临时外发授权
+-------------------------
+sendout -> sendoutreverted
